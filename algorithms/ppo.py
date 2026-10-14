@@ -144,9 +144,21 @@ def compute_gae(
         r_t + gamma * nonterminal * V(s_{t+1}) - V(s_t)``, and ``returns =
         advantages + values`` (the critic's regression target).
     """
-    # ===================== YOUR CODE HERE (Part 1) =====================
-    raise NotImplementedError("Implement compute_gae")
-    # ===================================================================
+    T = rewards.shape[0]
+    advantages = torch.zeros_like(rewards)
+    lastgaelam = torch.zeros_like(next_value)
+    for t in reversed(range(T)):
+        if t == T - 1:
+            nextnonterminal = 1.0 - next_done
+            nextvalues = next_value
+        else:
+            nextnonterminal = 1.0 - dones[t + 1]
+            nextvalues = values[t + 1]
+        delta = rewards[t] + gamma * nextvalues * nextnonterminal - values[t]
+        lastgaelam = delta + gamma * gae_lambda * nextnonterminal * lastgaelam
+        advantages[t] = lastgaelam
+    returns = advantages + values
+    return advantages, returns
 
 
 def compute_clipped_policy_loss(
@@ -161,9 +173,12 @@ def compute_clipped_policy_loss(
     Returns a scalar whose gradient *descent* performs ascent on that
     objective.
     """
-    # ===================== YOUR CODE HERE (Part 2) =====================
-    raise NotImplementedError("Implement compute_clipped_policy_loss")
-    # ===================================================================
+    oldlogprob = oldlogprob.detach()
+    advantages = advantages.detach()
+    ratio = (newlogprob - oldlogprob).exp()
+    pg_loss1 = -advantages * ratio
+    pg_loss2 = -advantages * torch.clamp(ratio, 1 - clip_coef, 1 + clip_coef)
+    return torch.max(pg_loss1, pg_loss2).mean()
 
 
 def approx_kl_and_clipfrac(
@@ -176,9 +191,12 @@ def approx_kl_and_clipfrac(
     ``(ratio - 1) - log(ratio)`` (http://joschu.net/blog/kl-approx.html);
     ``clipfrac`` is the fraction of samples with ``|ratio - 1| > clip_coef``.
     """
-    # ===================== YOUR CODE HERE (Part 3) =====================
-    raise NotImplementedError("Implement approx_kl_and_clipfrac")
-    # ===================================================================
+    with torch.no_grad():
+        logratio = newlogprob - oldlogprob
+        ratio = logratio.exp()
+        approx_kl = ((ratio - 1) - logratio).mean()
+        clipfrac = ((ratio - 1.0).abs() > clip_coef).float().mean()
+    return approx_kl, clipfrac
 
 
 class PPO(Algorithm):
